@@ -25,11 +25,12 @@ app = FastAPI(
 )
 
 # CORS
-cors_origins = list(settings.CORS_ORIGINS) if isinstance(settings.CORS_ORIGINS, list) else [str(settings.CORS_ORIGINS)]
+cors_origins = settings.cors_origins_list
+allow_all = "*" in cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=r"https://.*\.netlify\.app",
+    allow_origins=["*"] if allow_all else cors_origins,
+    allow_origin_regex=None if allow_all else r"https://.*\.netlify\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
