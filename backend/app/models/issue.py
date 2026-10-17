@@ -32,6 +32,7 @@ class IssueStatus(str, enum.Enum):
     ASSIGNED = "ASSIGNED"
     IN_PROGRESS = "IN_PROGRESS"
     RESOLVED = "RESOLVED"
+    CERTIFIED = "CERTIFIED"
     CLOSED = "CLOSED"
     REOPENED = "REOPENED"
     REJECTED = "REJECTED"
@@ -53,6 +54,7 @@ class Issue(Base):
     
     address_text = Column(String(255), nullable=True)
     ward_id = Column(Integer, ForeignKey("wards.id", ondelete="SET NULL"), nullable=True, index=True)
+    department_id = Column(Integer, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
     reporter_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     is_anonymous = Column(Boolean, default=False, nullable=False)
     
@@ -67,10 +69,14 @@ class Issue(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     verified_at = Column(DateTime(timezone=True), nullable=True)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+    certified_at = Column(DateTime(timezone=True), nullable=True)
+    certified_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     closed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     reporter = relationship("User", back_populates="reported_issues", foreign_keys=[reporter_id])
+    department = relationship("Department", foreign_keys=[department_id])
+    certified_by = relationship("User", foreign_keys=[certified_by_user_id])
     ward = relationship("Ward", back_populates="issues")
     photos = relationship("IssuePhoto", back_populates="issue", cascade="all, delete-orphan")
     assignments = relationship("IssueAssignment", back_populates="issue", cascade="all, delete-orphan", order_by="desc(IssueAssignment.assigned_at)")

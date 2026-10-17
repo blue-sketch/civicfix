@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import Optional, List, Any, Dict
 from pydantic import BaseModel, Field
 from app.models.issue import IssueCategory, IssueSeverity, IssueStatus
@@ -85,6 +85,9 @@ class MapIssueOut(BaseModel):
     ward_name: Optional[str] = None
     created_at: datetime
 
+class IssueCertifyRequest(BaseModel):
+    notes: Optional[str] = None
+
 class IssueDetailOut(BaseModel):
     id: str
     ticket_id: str
@@ -98,6 +101,8 @@ class IssueDetailOut(BaseModel):
     address_text: Optional[str] = None
     ward_id: Optional[int] = None
     ward_name: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
     reporter_id: int
     reporter_name: Optional[str] = None
     is_anonymous: bool
@@ -109,6 +114,8 @@ class IssueDetailOut(BaseModel):
     updated_at: datetime
     verified_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
+    certified_at: Optional[datetime] = None
+    certified_by_name: Optional[str] = None
     closed_at: Optional[datetime] = None
     photos: List[IssuePhotoOut] = []
     assignments: List[IssueAssignmentOut] = []

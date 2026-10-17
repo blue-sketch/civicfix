@@ -5,12 +5,10 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Shell } from './components/layout/Shell';
 import { OverviewPage } from './pages/OverviewPage';
 import { LiveMapPage } from './pages/LiveMapPage';
-import { AllIssuesPage } from './pages/AllIssuesPage';
 import { ReportIssuePage } from './pages/ReportIssuePage';
 import { MyComplaintsPage } from './pages/MyComplaintsPage';
 import { AssignmentsPage } from './pages/AssignmentsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
-import { SettingsPage } from './pages/SettingsPage';
 import { LoginPage } from './pages/LoginPage';
 
 const queryClient = new QueryClient({
@@ -40,14 +38,34 @@ const ProtectedAppLayout: React.FC = () => {
   return (
     <Shell>
       <Routes>
+        {/* Common Routes */}
         <Route path="/" element={<OverviewPage />} />
+        <Route path="/overview" element={<Navigate to="/" replace />} />
         <Route path="/map" element={<LiveMapPage />} />
-        <Route path="/issues" element={<AllIssuesPage />} />
-        <Route path="/report" element={<ReportIssuePage />} />
-        <Route path="/my-complaints" element={<MyComplaintsPage />} />
-        <Route path="/assignments" element={<AssignmentsPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+
+        {/* Citizen-Only Routes */}
+        {user.role === 'CITIZEN' && (
+          <>
+            <Route path="/report" element={<ReportIssuePage />} />
+            <Route path="/my-complaints" element={<MyComplaintsPage />} />
+          </>
+        )}
+
+        {/* Municipal Officer & Admin Routes */}
+        {(user.role === 'MUNICIPAL_OFFICER' || user.role === 'ADMIN') && (
+          <>
+            <Route path="/assignments" element={<AssignmentsPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+          </>
+        )}
+
+        {/* Explicit redirects for removed features */}
+        <Route path="/feed" element={<Navigate to="/" replace />} />
+        <Route path="/issues" element={<Navigate to="/" replace />} />
+        <Route path="/settings" element={<Navigate to="/" replace />} />
+        <Route path="/routes" element={<Navigate to="/" replace />} />
+
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

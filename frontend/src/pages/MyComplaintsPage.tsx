@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText,
@@ -20,13 +20,22 @@ import { IssueDetail, IssueStatus } from '../types';
 
 export const MyComplaintsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const [selectedIssue, setSelectedIssue] = useState<IssueDetail | null>(null);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [reopenNote, setReopenNote] = useState('');
   const [isReopening, setIsReopening] = useState(false);
   const [commentText, setCommentText] = useState('');
+
+  // Check URL query param ?id=
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) {
+      setSelectedIssueId(id);
+    }
+  }, [searchParams]);
 
   // Fetch only this citizen's grievances
   const { data: issuesData, isLoading } = useQuery({
@@ -35,29 +44,31 @@ export const MyComplaintsPage: React.FC = () => {
     enabled: !!user?.id,
   });
 
+  // Fetch full details of selected issue
+  const { data: selectedIssue } = useQuery({
+    queryKey: ['my_issue_detail', selectedIssueId],
+    queryFn: () => (selectedIssueId ? api.getIssue(selectedIssueId) : null),
+    enabled: !!selectedIssueId,
+  });
+
   // Reopen mutation
   const reopenMutation = useMutation({
     mutationFn: (issueId: string) => api.reopenIssue(issueId, reopenNote),
-    onSuccess: (updated) => {
-      setSelectedIssue(updated);
+    onSuccess: () => {
       setIsReopening(false);
       setReopenNote('');
       queryClient.invalidateQueries({ queryKey: ['my_issues'] });
+      queryClient.invalidateQueries({ queryKey: ['my_issue_detail', selectedIssueId] });
     },
   });
 
   // Add comment mutation
   const commentMutation = useMutation({
     mutationFn: (issueId: string) => api.addComment(issueId, commentText, false),
-    onSuccess: (newComment) => {
-      if (selectedIssue) {
-        setSelectedIssue({
-          ...selectedIssue,
-          comments: [...selectedIssue.comments, newComment as any],
-        });
-      }
+    onSuccess: () => {
       setCommentText('');
       queryClient.invalidateQueries({ queryKey: ['my_issues'] });
+      queryClient.invalidateQueries({ queryKey: ['my_issue_detail', selectedIssueId] });
     },
   });
 
@@ -67,7 +78,7 @@ export const MyComplaintsPage: React.FC = () => {
   const total = items.length;
   const awaitingVerification = items.filter((i) => i.status === 'SUBMITTED').length;
   const inProgress = items.filter((i) => ['VERIFIED', 'ASSIGNED', 'IN_PROGRESS'].includes(i.status)).length;
-  const resolved = items.filter((i) => ['RESOLVED', 'CLOSED'].includes(i.status)).length;
+  const resolved = items.filter((i) => ['RESOLVED', 'CERTIFIED', 'CLOSED'].includes(i.status)).length;
 
   return (
     <div className="p-4 lg:p-8 space-y-6 max-w-6xl mx-auto w-full">
@@ -132,7 +143,7 @@ export const MyComplaintsPage: React.FC = () => {
           items.map((issue) => (
             <div
               key={issue.id}
-              onClick={() => setSelectedIssue(issue)}
+              onClick={() => setSelectedIssueId(issue.id)}
               className="bg-white p-4 sm:p-5 rounded-panel border border-surface-border shadow-xs hover:border-primary transition cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4"
             >
               <div className="space-y-1.5 min-w-0">
@@ -195,7 +206,7 @@ export const MyComplaintsPage: React.FC = () => {
                 <h3 className="font-bold text-base text-navy-900">{selectedIssue.title}</h3>
               </div>
               <button
-                onClick={() => setSelectedIssue(null)}
+                onClick={() => setSelectedIssueId(null)}
                 className="p-1 rounded-lg text-text-muted hover:bg-surface-muted"
               >
                 <X className="w-5 h-5" />
@@ -246,7 +257,7 @@ export const MyComplaintsPage: React.FC = () => {
             )}
 
             {/* Reopening Section (Citizen right to challenge unresolved work) */}
-            {['RESOLVED', 'CLOSED'].includes(selectedIssue.status) && (
+            {['RESOLVED', 'CERTIFIED', 'CLOSED'].includes(selectedIssue.status) && (
               <div className="p-4 bg-red-50/70 border border-red-200 rounded-xl text-xs space-y-2">
                 <div className="font-bold text-status-critical flex items-center gap-1.5">
                   <RotateCcw className="w-4 h-4" />

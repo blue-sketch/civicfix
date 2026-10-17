@@ -579,6 +579,17 @@ def seed_database():
             resolved_dt = (now - timedelta(days=item["resolved_days_ago"])) if item.get("resolved_days_ago") else None
             verified_dt = (created_dt + timedelta(hours=6)) if item["status"] != IssueStatus.SUBMITTED else None
 
+            dept_for_cat = dept_roads
+            if item["category"] == IssueCategory.GARBAGE:
+                dept_for_cat = dept_swm
+            elif item["category"] in [IssueCategory.WATER_LEAK, IssueCategory.WATERLOGGING]:
+                dept_for_cat = dept_water
+            elif item["category"] == IssueCategory.STREETLIGHT:
+                dept_for_cat = dept_elec
+
+            is_certified = item["status"] == IssueStatus.RESOLVED and idx in [6, 12, 18]
+            issue_stat = IssueStatus.CERTIFIED if is_certified else item["status"]
+
             ticket_id = f"TKT-2026-{idx+1:04d}"
             issue = Issue(
                 id=str(uuid.uuid4()),
@@ -587,12 +598,13 @@ def seed_database():
                 description=item["description"],
                 category=item["category"],
                 severity=item["severity"],
-                status=item["status"],
+                status=issue_stat,
                 latitude=item["lat"],
                 longitude=item["lon"],
                 location_geom=f"SRID=4326;POINT({item['lon']} {item['lat']})",
                 address_text=item["address"],
                 ward_id=wards[item["ward_idx"]].id,
+                department_id=dept_for_cat.id,
                 reporter_id=citizen_user.id if idx % 2 == 0 else citizen_two.id,
                 is_anonymous=True if idx == 5 else False,
                 priority_score=p_calc["score"],
@@ -602,6 +614,8 @@ def seed_database():
                 updated_at=now - timedelta(hours=idx),
                 verified_at=verified_dt,
                 resolved_at=resolved_dt,
+                certified_at=(resolved_dt + timedelta(hours=3)) if is_certified else None,
+                certified_by_user_id=officer_roads.id if is_certified else None,
                 closed_at=resolved_dt if item["status"] == IssueStatus.CLOSED else None
             )
             db.add(issue)

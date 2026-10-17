@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, desc, asc
+from sqlalchemy import func, or_, and_, desc, asc
 from app.db.session import get_db
 from app.core.config import settings
 from app.models.user import User, UserRole
@@ -18,7 +18,7 @@ from app.schemas.issue import (
     IssueCreate, IssueDetailOut, IssueListResponse,
     IssueStatusChange, MapIssueOut, IssueCommentCreate,
     IssueCommentOut, IssueAssignCreate, IssueAssignmentOut,
-    IssueUpdateOut, IssuePhotoOut
+    IssueUpdateOut, IssuePhotoOut, IssueCertifyRequest
 )
 from app.api.deps import get_current_user, get_current_active_user_optional, require_role
 from app.services.priority_engine import calculate_priority_score
@@ -126,6 +126,8 @@ def serialize_issue_detail(issue: Issue, db: Session, current_user: Optional[Use
         "address_text": issue.address_text,
         "ward_id": issue.ward_id,
         "ward_name": ward_name,
+        "department_id": issue.department_id,
+        "department_name": issue.department.name if issue.department else None,
         "reporter_id": issue.reporter_id,
         "reporter_name": reporter_name,
         "is_anonymous": issue.is_anonymous,
@@ -137,6 +139,8 @@ def serialize_issue_detail(issue: Issue, db: Session, current_user: Optional[Use
         "updated_at": issue.updated_at,
         "verified_at": issue.verified_at,
         "resolved_at": issue.resolved_at,
+        "certified_at": issue.certified_at,
+        "certified_by_name": issue.certified_by.full_name if issue.certified_by else None,
         "closed_at": issue.closed_at,
         "photos": [
             {
@@ -171,7 +175,27 @@ def list_issues(
 ):
     query = db.query(Issue)
 
-    if reporter_id:
+    # Role-based access control and scoping
+    if current_user and current_user.role == UserRole.CITIZEN:
+        # Enforce that citizen can ONLY see their own reported issues
+        query = query.filter(Issue.reporter_id == current_user.id)
+    elif current_user and current_user.role == UserRole.MUNICIPAL_OFFICER:
+        # Enforce that officer can ONLY see their department's issues
+        if not current_user.department_id:
+            query = query.filter(Issue.id == "NO_MATCH_UNASSIGNED_OFFICER")
+        else:
+            query = query.filter(
+                or_(
+                    Issue.department_id == current_user.department_id,
+                    Issue.assignments.any(
+                        and_(
+                            IssueAssignment.department_id == current_user.department_id,
+                            IssueAssignment.is_current == True
+                        )
+                    )
+                )
+            )
+    elif reporter_id:
         query = query.filter(Issue.reporter_id == reporter_id)
 
     if category:
@@ -288,6 +312,19 @@ def create_issue(
         is_resolved=False
     )
 
+    category_dept_map = {
+        IssueCategory.POTHOLE: "ROADS",
+        IssueCategory.ROAD_CRACK: "ROADS",
+        IssueCategory.DAMAGED_INFRASTRUCTURE: "ROADS",
+        IssueCategory.GARBAGE: "SWM",
+        IssueCategory.WATER_LEAK: "WATER",
+        IssueCategory.WATERLOGGING: "WATER",
+        IssueCategory.STREETLIGHT: "ELEC",
+    }
+    dept_code = category_dept_map.get(issue_in.category)
+    dept_obj = db.query(Department).filter(Department.code == dept_code).first() if dept_code else None
+    dept_id = dept_obj.id if dept_obj else None
+
     issue = Issue(
         id=str(uuid.uuid4()),
         ticket_id=ticket_id,
@@ -301,6 +338,7 @@ def create_issue(
         location_geom=f"SRID=4326;POINT({issue_in.longitude} {issue_in.latitude})",
         address_text=issue_in.address_text,
         ward_id=issue_in.ward_id,
+        department_id=dept_id,
         reporter_id=current_user.id,
         is_anonymous=issue_in.is_anonymous,
         priority_score=p_calc["score"],
@@ -355,6 +393,21 @@ def get_issue(
         issue = db.query(Issue).filter(Issue.ticket_id == issue_id).first()
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+
+    # Citizen privacy enforcement: citizen can ONLY access their own complaints
+    if current_user and current_user.role == UserRole.CITIZEN:
+        if issue.reporter_id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+
+    # Officer department scoping
+    if current_user and current_user.role == UserRole.MUNICIPAL_OFFICER:
+        if not current_user.department_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No department assigned to officer")
+        is_dept_issue = (issue.department_id == current_user.department_id) or any(
+            a.department_id == current_user.department_id for a in issue.assignments if a.is_current
+        )
+        if not is_dept_issue:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot access issue outside your assigned department")
     
     return serialize_issue_detail(issue, db, current_user)
 
@@ -386,7 +439,7 @@ def update_issue_status(
 def verify_issue(
     issue_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.MUNICIPAL_OFFICER, UserRole.ADMIN]))
+    current_user: User = Depends(require_role([UserRole.ADMIN]))
 ):
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue:
@@ -397,7 +450,7 @@ def verify_issue(
         issue=issue,
         to_status=IssueStatus.VERIFIED,
         actor=current_user,
-        note="Issue verified by municipal officer"
+        note="Issue verified by municipal administrator"
     )
     return serialize_issue_detail(updated, db, current_user)
 
@@ -406,7 +459,7 @@ def assign_issue(
     issue_id: str,
     assign_in: IssueAssignCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.MUNICIPAL_OFFICER, UserRole.ADMIN]))
+    current_user: User = Depends(require_role([UserRole.ADMIN]))
 ):
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue:
@@ -418,6 +471,9 @@ def assign_issue(
         IssueAssignment.issue_id == issue.id,
         IssueAssignment.is_current == True
     ).update({"is_current": False})
+
+    if assign_in.department_id:
+        issue.department_id = assign_in.department_id
 
     assignment = IssueAssignment(
         issue_id=issue.id,
@@ -485,6 +541,42 @@ def resolve_issue(
         actor=current_user,
         note="Resolution completed",
         resolution_notes=resolution_notes
+    )
+    return serialize_issue_detail(updated, db, current_user)
+
+@router.post("/{issue_id}/certify", response_model=IssueDetailOut)
+def certify_issue(
+    issue_id: str,
+    payload: Optional[IssueCertifyRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.MUNICIPAL_OFFICER, UserRole.ADMIN]))
+):
+    issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+
+    if issue.status != IssueStatus.RESOLVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Issue must be in RESOLVED state to be certified (current: {issue.status.value})"
+        )
+
+    if current_user.role == UserRole.MUNICIPAL_OFFICER:
+        if not current_user.department_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No department assigned to officer")
+        is_dept_issue = (issue.department_id == current_user.department_id) or any(
+            a.department_id == current_user.department_id for a in issue.assignments if a.is_current
+        )
+        if not is_dept_issue:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot certify issue outside your assigned department")
+
+    certify_note = payload.notes if payload and payload.notes else "Resolution certified by municipal officer after field quality inspection"
+    updated = apply_status_transition(
+        db=db,
+        issue=issue,
+        to_status=IssueStatus.CERTIFIED,
+        actor=current_user,
+        note=certify_note
     )
     return serialize_issue_detail(updated, db, current_user)
 

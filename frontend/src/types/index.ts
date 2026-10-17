@@ -30,6 +30,7 @@ export type IssueStatus =
   | 'ASSIGNED'
   | 'IN_PROGRESS'
   | 'RESOLVED'
+  | 'CERTIFIED'
   | 'CLOSED'
   | 'REOPENED'
   | 'REJECTED';
@@ -124,6 +125,8 @@ export interface IssueDetail {
   address_text?: string;
   ward_id?: number;
   ward_name?: string;
+  department_id?: number;
+  department_name?: string;
   reporter_id: number;
   reporter_name?: string;
   is_anonymous: boolean;
@@ -135,6 +138,8 @@ export interface IssueDetail {
   updated_at: string;
   verified_at?: string;
   resolved_at?: string;
+  certified_at?: string;
+  certified_by_name?: string;
   closed_at?: string;
   photos: IssuePhoto[];
   assignments: IssueAssignment[];

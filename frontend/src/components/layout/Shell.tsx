@@ -57,7 +57,11 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/issues?search=${encodeURIComponent(searchQuery.trim())}`);
+      if (user?.role === 'CITIZEN') {
+        navigate(`/my-complaints?search=${encodeURIComponent(searchQuery.trim())}`);
+      } else {
+        navigate(`/map?search=${encodeURIComponent(searchQuery.trim())}`);
+      }
     }
   };
 
@@ -72,29 +76,21 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const getNavLinks = (): NavItem[] => {
     const role = user?.role || 'CITIZEN';
 
-    const common: NavItem[] = [
-      { to: '/', label: 'Overview', icon: LayoutDashboard },
-      { to: '/map', label: 'Live Issue Map', icon: MapIcon },
-    ];
-
     if (role === 'CITIZEN') {
       return [
-        ...common,
+        { to: '/', label: 'Overview', icon: LayoutDashboard },
         { to: '/report', label: 'Report an Issue', icon: PlusCircle, highlight: true },
+        { to: '/map', label: 'Live Issue Map', icon: MapIcon },
         { to: '/my-complaints', label: 'My Complaints', icon: FileText },
-        { to: '/issues', label: 'Community Feed', icon: ListTodo },
       ];
     }
 
-
-    // Officer & Admin
+    // MUNICIPAL_OFFICER & ADMIN have identical clean operational nav
     return [
-      ...common,
-      { to: '/issues', label: 'All Issues', icon: ListTodo },
+      { to: '/', label: 'Overview', icon: LayoutDashboard },
+      { to: '/map', label: 'Live Issue Map', icon: MapIcon },
       { to: '/assignments', label: 'Assignments', icon: Briefcase },
-      { to: '/report', label: 'Submit Issue', icon: PlusCircle },
-      { to: '/analytics', label: 'Operations Analytics', icon: BarChart3 },
-      { to: '/settings', label: 'Settings & Routes', icon: Settings },
+      { to: '/analytics', label: 'Operation Analytics', icon: BarChart3 },
     ];
   };
 
@@ -176,14 +172,16 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             })}
           </div>
 
-          {/* Quick New Report Action */}
-          <NavLink
-            to="/report"
-            className="flex items-center gap-1.5 bg-teal-accent hover:bg-teal-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Report Issue</span>
-          </NavLink>
+          {/* Quick New Report Action - Citizen Only */}
+          {user?.role === 'CITIZEN' && (
+            <NavLink
+              to="/report"
+              className="flex items-center gap-1.5 bg-teal-accent hover:bg-teal-600 text-navy-950 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Report Issue</span>
+            </NavLink>
+          )}
 
           {/* Notifications Button */}
           <div className="relative">

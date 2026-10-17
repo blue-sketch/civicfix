@@ -28,16 +28,75 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { api } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const COLORS = ['#3158D8', '#0F9D8A', '#F59E0B', '#EF4444', '#8B5CF6', '#0284C7', '#10B981', '#6366F1'];
 
 export const AnalyticsPage: React.FC = () => {
-  const { data: overview } = useQuery({ queryKey: ['analytics_overview'], queryFn: api.getOverviewMetrics });
-  const { data: categories = [] } = useQuery({ queryKey: ['analytics_categories'], queryFn: api.getCategoryMetrics });
-  const { data: statuses = [] } = useQuery({ queryKey: ['analytics_statuses'], queryFn: api.getStatusMetrics });
-  const { data: trends = [] } = useQuery({ queryKey: ['analytics_trends'], queryFn: () => api.getTrends(14) });
-  const { data: wards = [] } = useQuery({ queryKey: ['analytics_wards'], queryFn: api.getWardMetrics });
-  const { data: teams = [] } = useQuery({ queryKey: ['analytics_teams'], queryFn: api.getTeamMetrics });
+  const { user } = useAuth();
+
+  const isPrivileged = user?.role === 'ADMIN' || (user?.role === 'MUNICIPAL_OFFICER' && !!user?.department_id);
+
+  const { data: overview } = useQuery({
+    queryKey: ['analytics_overview', user?.department_id],
+    queryFn: api.getOverviewMetrics,
+    enabled: isPrivileged,
+  });
+  const { data: categories = [] } = useQuery({
+    queryKey: ['analytics_categories', user?.department_id],
+    queryFn: api.getCategoryMetrics,
+    enabled: isPrivileged,
+  });
+  const { data: statuses = [] } = useQuery({
+    queryKey: ['analytics_statuses', user?.department_id],
+    queryFn: api.getStatusMetrics,
+    enabled: isPrivileged,
+  });
+  const { data: trends = [] } = useQuery({
+    queryKey: ['analytics_trends', user?.department_id],
+    queryFn: () => api.getTrends(14),
+    enabled: isPrivileged,
+  });
+  const { data: wards = [] } = useQuery({
+    queryKey: ['analytics_wards', user?.department_id],
+    queryFn: api.getWardMetrics,
+    enabled: isPrivileged,
+  });
+  const { data: teams = [] } = useQuery({
+    queryKey: ['analytics_teams', user?.department_id],
+    queryFn: api.getTeamMetrics,
+    enabled: isPrivileged,
+  });
+
+  if (user?.role === 'CITIZEN') {
+    return (
+      <div className="p-8 max-w-xl mx-auto text-center space-y-4 my-12">
+        <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-500 shadow-xs">
+          <AlertTriangle className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-navy-900">Access Restricted</h2>
+        <p className="text-sm text-text-muted">
+          Operations Analytics is reserved for municipal officers and administrators.
+        </p>
+      </div>
+    );
+  }
+
+  if (user?.role === 'MUNICIPAL_OFFICER' && !user?.department_id) {
+    return (
+      <div className="p-8 max-w-xl mx-auto text-center space-y-4 my-12">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto text-amber-600 shadow-xs">
+          <AlertTriangle className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-navy-900">No Department Assigned</h2>
+        <p className="text-sm text-text-muted">
+          No department assigned. Contact an administrator to be assigned to a department.
+        </p>
+      </div>
+    );
+  }
+
+  const isOfficer = user?.role === 'MUNICIPAL_OFFICER';
 
   return (
     <div className="p-4 lg:p-8 space-y-8 max-w-7xl mx-auto w-full">
@@ -45,13 +104,15 @@ export const AnalyticsPage: React.FC = () => {
       <div>
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-teal-accent mb-1">
           <BarChart3 className="w-3.5 h-3.5" />
-          <span>Municipal Intelligence & SLA Compliance</span>
+          <span>{isOfficer ? 'Department Telemetry & SLA Compliance' : 'Municipal Intelligence & SLA Compliance'}</span>
         </div>
         <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-navy-900">
-          Executive Operations Analytics
+          {isOfficer ? 'Department Operations Analytics' : 'Citywide Operations Analytics'}
         </h1>
         <p className="text-xs sm:text-sm text-text-muted mt-1">
-          Quantitative telemetry on grievance resolution, departmental throughput, and ward-level municipal efficiency.
+          {isOfficer
+            ? 'Quantitative telemetry on grievance resolution, departmental throughput, and SLA compliance.'
+            : 'Quantitative telemetry on grievance resolution, departmental throughput, and ward-level municipal efficiency across Pune.'}
         </p>
       </div>
 

@@ -15,8 +15,10 @@ import {
   Map as MapIcon,
   PlusCircle,
   ShieldAlert,
-  Calendar
+  Calendar,
+  ClipboardList
 } from 'lucide-react';
+import { CitizenOverview } from './CitizenOverview';
 import {
   PieChart,
   Pie,
@@ -62,36 +64,62 @@ export const OverviewPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  if (user?.role === 'CITIZEN') {
+    return <CitizenOverview />;
+  }
+
+  if (user?.role === 'MUNICIPAL_OFFICER' && !user?.department_id) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto text-center space-y-4 my-12">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto text-amber-600 shadow-xs">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h1 className="text-xl font-bold text-navy-900">No Department Assigned</h1>
+        <p className="text-sm text-text-muted">
+          No department assigned. Contact an administrator to be assigned to a department.
+        </p>
+      </div>
+    );
+  }
+
+  const isPrivileged = user?.role === 'ADMIN' || (user?.role === 'MUNICIPAL_OFFICER' && !!user?.department_id);
+
   // Queries
   const { data: metrics, isLoading: loadingMetrics } = useQuery({
-    queryKey: ['analytics_overview'],
+    queryKey: ['analytics_overview', user?.department_id],
     queryFn: () => api.getOverviewMetrics(),
+    enabled: isPrivileged,
   });
 
   const { data: categoryData = [] } = useQuery({
-    queryKey: ['analytics_categories'],
+    queryKey: ['analytics_categories', user?.department_id],
     queryFn: () => api.getCategoryMetrics(),
+    enabled: isPrivileged,
   });
 
   const { data: statusData = [] } = useQuery({
-    queryKey: ['analytics_statuses'],
+    queryKey: ['analytics_statuses', user?.department_id],
     queryFn: () => api.getStatusMetrics(),
+    enabled: isPrivileged,
   });
 
   const { data: trendData = [] } = useQuery({
-    queryKey: ['analytics_trends'],
+    queryKey: ['analytics_trends', user?.department_id],
     queryFn: () => api.getTrends(14),
+    enabled: isPrivileged,
   });
 
   const { data: wardData = [] } = useQuery({
-    queryKey: ['analytics_wards'],
+    queryKey: ['analytics_wards', user?.department_id],
     queryFn: () => api.getWardMetrics(),
+    enabled: isPrivileged,
   });
 
   // Top 5 priority unresolved issues
   const { data: priorityQueueData } = useQuery({
-    queryKey: ['priority_queue'],
+    queryKey: ['priority_queue', user?.department_id],
     queryFn: () => api.listIssues({ page: 1, page_size: 5, sort_by: 'priority_score', sort_order: 'desc' }),
+    enabled: isPrivileged,
   });
 
   const topPriorityIssues = priorityQueueData?.items.filter(
@@ -105,13 +133,15 @@ export const OverviewPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-teal-accent mb-1">
             <Activity className="w-3.5 h-3.5" />
-            <span>Operational Telemetry & Grid Status</span>
+            <span>{user?.role === 'MUNICIPAL_OFFICER' ? 'Department Telemetry & Ops' : 'Operational Telemetry & Grid Status'}</span>
           </div>
           <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-navy-900">
-            Municipal Operations Overview
+            {user?.role === 'MUNICIPAL_OFFICER' ? 'Department Operations Overview' : 'Municipal Operations Overview'}
           </h1>
           <p className="text-xs sm:text-sm text-text-muted mt-1">
-            Monitor civic grievances, engineering dispatch, and SLA resolution progress across Pune.
+            {user?.role === 'MUNICIPAL_OFFICER'
+              ? 'Monitor department civic grievances, dispatch status, and SLA resolution.'
+              : 'Monitor civic grievances, engineering dispatch, and SLA resolution progress across Pune.'}
           </p>
         </div>
 
@@ -125,11 +155,11 @@ export const OverviewPage: React.FC = () => {
             <span>Open Live Map</span>
           </button>
           <button
-            onClick={() => navigate('/report')}
+            onClick={() => navigate('/assignments')}
             className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition"
           >
-            <PlusCircle className="w-4 h-4" />
-            <span>Report Problem</span>
+            <ClipboardList className="w-4 h-4" />
+            <span>View Assignments</span>
           </button>
         </div>
       </div>

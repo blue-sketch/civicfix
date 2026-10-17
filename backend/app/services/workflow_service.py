@@ -15,7 +15,8 @@ VALID_TRANSITIONS = {
     IssueStatus.VERIFIED: [IssueStatus.ASSIGNED, IssueStatus.IN_PROGRESS, IssueStatus.REJECTED],
     IssueStatus.ASSIGNED: [IssueStatus.IN_PROGRESS, IssueStatus.RESOLVED, IssueStatus.VERIFIED],
     IssueStatus.IN_PROGRESS: [IssueStatus.RESOLVED, IssueStatus.ASSIGNED],
-    IssueStatus.RESOLVED: [IssueStatus.CLOSED, IssueStatus.REOPENED],
+    IssueStatus.RESOLVED: [IssueStatus.CERTIFIED, IssueStatus.CLOSED, IssueStatus.REOPENED],
+    IssueStatus.CERTIFIED: [IssueStatus.CLOSED, IssueStatus.REOPENED],
     IssueStatus.CLOSED: [IssueStatus.REOPENED],
     IssueStatus.REOPENED: [IssueStatus.VERIFIED, IssueStatus.ASSIGNED, IssueStatus.IN_PROGRESS],
     IssueStatus.REJECTED: [IssueStatus.REOPENED],
@@ -33,9 +34,9 @@ def can_transition(from_status: IssueStatus, to_status: IssueStatus, user_role: 
     if to_status not in allowed:
         return False
         
-    # Citizens can only reopen their resolved/closed issues
+    # Citizens can only reopen their resolved/certified/closed issues
     if user_role == UserRole.CITIZEN:
-        if to_status == IssueStatus.REOPENED and from_status in [IssueStatus.RESOLVED, IssueStatus.CLOSED]:
+        if to_status == IssueStatus.REOPENED and from_status in [IssueStatus.RESOLVED, IssueStatus.CERTIFIED, IssueStatus.CLOSED]:
             return True
         return False
         
@@ -75,6 +76,9 @@ def apply_status_transition(
             issue.resolution_notes = resolution_notes
         elif note:
             issue.resolution_notes = note
+    elif to_status == IssueStatus.CERTIFIED:
+        issue.certified_at = now
+        issue.certified_by_user_id = actor.id
     elif to_status == IssueStatus.CLOSED:
         issue.closed_at = now
 
@@ -94,7 +98,7 @@ def apply_status_transition(
         severity=issue.severity.value,
         category=issue.category.value,
         created_at=issue.created_at,
-        is_resolved=(to_status in [IssueStatus.RESOLVED, IssueStatus.CLOSED])
+        is_resolved=(to_status in [IssueStatus.RESOLVED, IssueStatus.CERTIFIED, IssueStatus.CLOSED])
     )
     issue.priority_score = p_calc['score']
     issue.priority_breakdown = p_calc

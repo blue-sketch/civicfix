@@ -1,48 +1,84 @@
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any
-from fastapi import APIRouter, Depends
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import func, text, or_, and_
 from app.db.session import get_db
 from app.models.issue import Issue, IssueStatus, IssueCategory, IssueAssignment
 from app.models.department import Ward, Team, Department
+from app.models.user import User, UserRole
 from app.schemas.analytics import OverviewMetrics, CategoryCount, StatusCount, TrendPoint, WardMetric, TeamMetric
+from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
-@router.get("/overview", response_model=OverviewMetrics)
-def get_analytics_overview(db: Session = Depends(get_db)):
-    total = db.query(Issue).count()
+def get_base_issue_query(db: Session, current_user: User):
+    if current_user.role == UserRole.CITIZEN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Citizens are not authorized to access operational analytics"
+        )
     
-    open_count = db.query(Issue).filter(
-        Issue.status.notin_([IssueStatus.RESOLVED, IssueStatus.CLOSED, IssueStatus.REJECTED])
+    query = db.query(Issue)
+    if current_user.role == UserRole.MUNICIPAL_OFFICER:
+        if not current_user.department_id:
+            return query.filter(Issue.id == "NO_MATCH_NO_DEPT")
+        query = query.filter(
+            or_(
+                Issue.department_id == current_user.department_id,
+                Issue.assignments.any(
+                    and_(
+                        IssueAssignment.department_id == current_user.department_id,
+                        IssueAssignment.is_current == True
+                    )
+                )
+            )
+        )
+    return query
+
+@router.get("/overview", response_model=OverviewMetrics)
+def get_analytics_overview(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    query = get_base_issue_query(db, current_user)
+    total = query.count()
+    
+    open_count = query.filter(
+        Issue.status.notin_([IssueStatus.RESOLVED, IssueStatus.CERTIFIED, IssueStatus.CLOSED, IssueStatus.REJECTED])
     ).count()
 
-    high_pri_count = db.query(Issue).filter(
-        Issue.status.notin_([IssueStatus.RESOLVED, IssueStatus.CLOSED, IssueStatus.REJECTED]),
+    high_pri_count = query.filter(
+        Issue.status.notin_([IssueStatus.RESOLVED, IssueStatus.CERTIFIED, IssueStatus.CLOSED, IssueStatus.REJECTED]),
         Issue.priority_score >= 55.0
     ).count()
 
     now = datetime.now(timezone.utc)
     first_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
-    resolved_month_count = db.query(Issue).filter(
-        Issue.status.in_([IssueStatus.RESOLVED, IssueStatus.CLOSED]),
+    resolved_month_count = query.filter(
+        Issue.status.in_([IssueStatus.RESOLVED, IssueStatus.CERTIFIED, IssueStatus.CLOSED]),
         Issue.resolved_at >= first_of_month
     ).count()
 
     seven_days_ago = now - timedelta(days=7)
-    overdue_count = db.query(Issue).filter(
-        Issue.status.notin_([IssueStatus.RESOLVED, IssueStatus.CLOSED, IssueStatus.REJECTED]),
+    overdue_count = query.filter(
+        Issue.status.notin_([IssueStatus.RESOLVED, IssueStatus.CERTIFIED, IssueStatus.CLOSED, IssueStatus.REJECTED]),
         Issue.created_at <= seven_days_ago
     ).count()
 
-    resolution_times = db.execute(text("""
-        SELECT EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600.0 as hours
-        FROM issues
-        WHERE resolved_at IS NOT NULL AND status IN ('RESOLVED', 'CLOSED');
-    """)).fetchall()
+    # Resolution hours calculation
+    resolved_issues = query.filter(
+        Issue.resolved_at.isnot(None),
+        Issue.status.in_([IssueStatus.RESOLVED, IssueStatus.CERTIFIED, IssueStatus.CLOSED])
+    ).all()
 
-    hours_list = [float(r[0]) for r in resolution_times if r[0] is not None and r[0] >= 0]
+    hours_list = []
+    for iss in resolved_issues:
+        if iss.resolved_at and iss.created_at:
+            diff_h = (iss.resolved_at - iss.created_at).total_seconds() / 3600.0
+            if diff_h >= 0:
+                hours_list.append(diff_h)
+
     if hours_list:
         avg_hours = round(sum(hours_list) / len(hours_list), 1)
         sorted_hours = sorted(hours_list)
@@ -66,9 +102,13 @@ def get_analytics_overview(db: Session = Depends(get_db)):
     }
 
 @router.get("/categories", response_model=List[CategoryCount])
-def get_category_metrics(db: Session = Depends(get_db)):
-    total = db.query(Issue).count()
-    results = db.query(
+def get_category_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    query = get_base_issue_query(db, current_user)
+    total = query.count()
+    results = query.with_entities(
         Issue.category, func.count(Issue.id)
     ).group_by(Issue.category).all()
 
@@ -84,8 +124,12 @@ def get_category_metrics(db: Session = Depends(get_db)):
     return output
 
 @router.get("/statuses", response_model=List[StatusCount])
-def get_status_metrics(db: Session = Depends(get_db)):
-    results = db.query(
+def get_status_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    query = get_base_issue_query(db, current_user)
+    results = query.with_entities(
         Issue.status, func.count(Issue.id)
     ).group_by(Issue.status).all()
 
@@ -97,25 +141,32 @@ def get_status_metrics(db: Session = Depends(get_db)):
     return [{"status": k, "count": v} for k, v in counts_map.items()]
 
 @router.get("/trends", response_model=List[TrendPoint])
-def get_resolution_trends(db: Session = Depends(get_db), days: int = 14):
+def get_resolution_trends(
+    db: Session = Depends(get_db),
+    days: int = 14,
+    current_user: User = Depends(get_current_user)
+):
+    query = get_base_issue_query(db, current_user)
     now = datetime.now(timezone.utc)
     dates = [(now - timedelta(days=i)).strftime("%b %d") for i in range(days - 1, -1, -1)]
-    
-    submissions = db.execute(text("""
-        SELECT TO_CHAR(created_at, 'Mon DD') as dt, COUNT(*) as c
-        FROM issues
-        WHERE created_at >= NOW() - (:days || ' days')::INTERVAL
-        GROUP BY dt;
-    """), {"days": days}).fetchall()
-    sub_map = {r[0]: r[1] for r in submissions}
+    start_date = now - timedelta(days=days)
 
-    resolutions = db.execute(text("""
-        SELECT TO_CHAR(resolved_at, 'Mon DD') as dt, COUNT(*) as c
-        FROM issues
-        WHERE resolved_at >= NOW() - (:days || ' days')::INTERVAL
-        GROUP BY dt;
-    """), {"days": days}).fetchall()
-    res_map = {r[0]: r[1] for r in resolutions}
+    recent_issues = query.filter(
+        or_(
+            Issue.created_at >= start_date,
+            Issue.resolved_at >= start_date
+        )
+    ).all()
+
+    sub_map = {}
+    res_map = {}
+    for iss in recent_issues:
+        if iss.created_at and iss.created_at >= start_date:
+            d_sub = iss.created_at.strftime("%b %d")
+            sub_map[d_sub] = sub_map.get(d_sub, 0) + 1
+        if iss.resolved_at and iss.resolved_at >= start_date:
+            d_res = iss.resolved_at.strftime("%b %d")
+            res_map[d_res] = res_map.get(d_res, 0) + 1
 
     trend = []
     for d in dates:
@@ -127,14 +178,18 @@ def get_resolution_trends(db: Session = Depends(get_db), days: int = 14):
     return trend
 
 @router.get("/wards", response_model=List[WardMetric])
-def get_ward_metrics(db: Session = Depends(get_db)):
+def get_ward_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    base_query = get_base_issue_query(db, current_user)
     wards = db.query(Ward).all()
     output = []
     for w in wards:
-        total = db.query(Issue).filter(Issue.ward_id == w.id).count()
-        resolved = db.query(Issue).filter(
+        total = base_query.filter(Issue.ward_id == w.id).count()
+        resolved = base_query.filter(
             Issue.ward_id == w.id,
-            Issue.status.in_([IssueStatus.RESOLVED, IssueStatus.CLOSED])
+            Issue.status.in_([IssueStatus.RESOLVED, IssueStatus.CERTIFIED, IssueStatus.CLOSED])
         ).count()
         open_c = total - resolved
         output.append({
@@ -148,19 +203,31 @@ def get_ward_metrics(db: Session = Depends(get_db)):
     return output
 
 @router.get("/teams", response_model=List[TeamMetric])
-def get_team_metrics(db: Session = Depends(get_db)):
-    teams = db.query(Team).all()
+def get_team_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role == UserRole.CITIZEN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized")
+
+    team_query = db.query(Team)
+    if current_user.role == UserRole.MUNICIPAL_OFFICER:
+        if not current_user.department_id:
+            return []
+        team_query = team_query.filter(Team.department_id == current_user.department_id)
+
+    teams = team_query.all()
     output = []
     for t in teams:
         active = db.query(IssueAssignment).join(Issue).filter(
             IssueAssignment.team_id == t.id,
             IssueAssignment.is_current == True,
-            Issue.status.notin_([IssueStatus.RESOLVED, IssueStatus.CLOSED, IssueStatus.REJECTED])
+            Issue.status.notin_([IssueStatus.RESOLVED, IssueStatus.CERTIFIED, IssueStatus.CLOSED, IssueStatus.REJECTED])
         ).count()
 
         resolved = db.query(IssueAssignment).join(Issue).filter(
             IssueAssignment.team_id == t.id,
-            Issue.status.in_([IssueStatus.RESOLVED, IssueStatus.CLOSED])
+            Issue.status.in_([IssueStatus.RESOLVED, IssueStatus.CERTIFIED, IssueStatus.CLOSED])
         ).count()
 
         dept_name = t.department.name if t.department else "Public Works"

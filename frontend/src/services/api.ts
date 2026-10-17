@@ -197,6 +197,15 @@ export const api = {
     return handleResponse(res);
   },
 
+  async certifyIssue(issueId: string, notes?: string): Promise<IssueDetail> {
+    const res = await fetch(`${API_BASE}/issues/${issueId}/certify`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ notes }),
+    });
+    return handleResponse(res);
+  },
+
   async reopenIssue(issueId: string, note: string): Promise<IssueDetail> {
     const formData = new FormData();
     formData.append('note', note);

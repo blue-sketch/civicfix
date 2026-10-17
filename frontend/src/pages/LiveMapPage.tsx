@@ -6,11 +6,10 @@ import {
   TileLayer,
   Marker,
   Popup,
-  Polyline,
-  useMap,
-  useMapEvents
+  useMap
 } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   MapPin,
   Filter,
@@ -30,22 +29,20 @@ import {
   Layers,
   ChevronLeft,
   ChevronRight,
-  Route,
-  Trash2,
-  Save,
   MessageSquare,
   Sparkles,
-  Link2
+  Link2,
+  Maximize2
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { ImageLightbox } from '../components/common/ImageLightbox';
 import {
   MapIssue,
   IssueDetail,
   IssueCategory,
   IssueStatus,
-  IssueSeverity,
-  SavedRoute
+  IssueSeverity
 } from '../types';
 
 // Category color mappings
@@ -96,30 +93,21 @@ function createMarkerIcon(category: string, priorityScore: number, isSelected: b
   });
 }
 
-// Controller component to smoothly pan/zoom map to coordinates
+// Controller component to smoothly pan/zoom map to coordinates and invalidate size
 function MapController({ center, zoom }: { center: [number, number]; zoom?: number }) {
   const map = useMap();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [map]);
+
   useEffect(() => {
     map.flyTo(center, zoom || map.getZoom(), { duration: 1.2 });
   }, [center, zoom, map]);
-  return null;
-}
 
-// Route creation click listener
-function MapClickHandler({
-  routeMode,
-  onAddPoint
-}: {
-  routeMode: boolean;
-  onAddPoint: (latlng: [number, number]) => void;
-}) {
-  useMapEvents({
-    click(e) {
-      if (routeMode) {
-        onAddPoint([e.latlng.lat, e.latlng.lng]);
-      }
-    },
-  });
   return null;
 }
 
@@ -145,11 +133,9 @@ export const LiveMapPage: React.FC = () => {
   const [newComment, setNewComment] = useState('');
   const [isInternalComment, setIsInternalComment] = useState(false);
 
-  // Custom Route Planning Tool State
-  const [routeMode, setRouteMode] = useState<boolean>(false);
-  const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
-  const [routeName, setRouteName] = useState<string>('');
-  const [savingRoute, setSavingRoute] = useState<boolean>(false);
+  // Evidence Photo Lightbox State
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // Sync selected issue from URL param if available
   useEffect(() => {
@@ -217,43 +203,6 @@ export const LiveMapPage: React.FC = () => {
     setSearchParams({ id: issue.id });
   };
 
-  // Calculate distance between points in KM
-  const calculateDistance = (points: [number, number][]): number => {
-    let total = 0;
-    for (let i = 0; i < points.length - 1; i++) {
-      const lat1 = points[i][0] * (Math.PI / 180);
-      const lon1 = points[i][1] * (Math.PI / 180);
-      const lat2 = points[i + 1][0] * (Math.PI / 180);
-      const lon2 = points[i + 1][1] * (Math.PI / 180);
-      const dlat = lat2 - lat1;
-      const dlon = lon2 - lon1;
-      const a =
-        Math.sin(dlat / 2) ** 2 +
-        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dlon / 2) ** 2;
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      total += 6371 * c; // Earth radius ~6371 km
-    }
-    return Math.round(total * 10) / 10;
-  };
-
-  // Save Custom Route
-  const handleSaveRoute = async () => {
-    if (!routeName.trim() || routePoints.length < 2) return;
-    setSavingRoute(true);
-    try {
-      const dist = calculateDistance(routePoints);
-      await api.createSavedRoute(routeName, routePoints, dist);
-      setRoutePoints([]);
-      setRouteName('');
-      setRouteMode(false);
-      alert('Custom route saved to municipal inspection registry!');
-    } catch (e: any) {
-      alert(`Failed to save route: ${e.message}`);
-    } finally {
-      setSavingRoute(false);
-    }
-  };
-
   const copyCoordinates = (lat: number, lon: number) => {
     navigator.clipboard.writeText(`${lat.toFixed(6)}, ${lon.toFixed(6)}`);
     setCopied(true);
@@ -263,7 +212,7 @@ export const LiveMapPage: React.FC = () => {
   const isPrivileged = user?.role && ['MUNICIPAL_OFFICER', 'ADMIN'].includes(user.role);
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] relative overflow-hidden bg-surface-bg">
+    <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] relative overflow-hidden bg-surface-bg min-h-0">
       {/* Top Filter Bar */}
       <div className="bg-white border-b border-surface-border px-4 py-2.5 z-20 shadow-xs flex flex-wrap items-center justify-between gap-3">
         {/* Category Pills */}
@@ -314,70 +263,14 @@ export const LiveMapPage: React.FC = () => {
             <option value="ASSIGNED">Assigned</option>
             <option value="IN_PROGRESS">In Progress</option>
             <option value="RESOLVED">Resolved</option>
+            <option value="CERTIFIED">Certified</option>
             <option value="CLOSED">Closed</option>
           </select>
-
-          {/* Mark Custom Route Mode Button */}
-          <button
-            onClick={() => {
-              setRouteMode(!routeMode);
-              if (!routeMode) {
-                setRoutePoints([]);
-              }
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition shadow-xs ${
-              routeMode
-                ? 'bg-status-critical text-white'
-                : 'bg-teal-accent text-white hover:bg-teal-600'
-            }`}
-          >
-            <Route className="w-3.5 h-3.5" />
-            <span>{routeMode ? 'Exit Route Tool' : 'Mark Custom Route'}</span>
-          </button>
         </div>
       </div>
 
-      {/* Route Tool Floating Banner (When Active) */}
-      {routeMode && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 bg-navy-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-navy-700 flex items-center gap-4 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-teal-accent animate-ping" />
-            <span className="font-semibold">Route Planner Active:</span>
-            <span className="text-slate-300">
-              Click consecutive points on the map. Selected: {routePoints.length} points (
-              {calculateDistance(routePoints)} km straight-line preview)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={routeName}
-              onChange={(e) => setRouteName(e.target.value)}
-              placeholder="Route name (e.g. Ward 4 Mon Patrol)"
-              className="bg-navy-800 border border-navy-700 rounded-lg px-3 py-1 text-white text-xs placeholder-slate-400 focus:outline-none focus:border-teal-accent"
-            />
-            <button
-              onClick={handleSaveRoute}
-              disabled={routePoints.length < 2 || !routeName.trim() || savingRoute}
-              className="bg-teal-accent hover:bg-teal-600 disabled:opacity-50 text-white px-3 py-1 rounded-lg font-bold flex items-center gap-1 transition"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>Save</span>
-            </button>
-            <button
-              onClick={() => setRoutePoints([])}
-              className="text-slate-400 hover:text-white p-1"
-              title="Clear points"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Main Workspace: Left Detail Panel + Right Map */}
-      <div className="flex-1 flex relative overflow-hidden">
+      <div className="flex-1 flex relative overflow-hidden min-h-0">
         {/* Collapsible Left Side Detail Panel (approx 380px) */}
         {selectedIssueId && panelOpen && (
           <aside className="w-full sm:w-[420px] bg-white border-r border-surface-border shadow-xl z-30 flex flex-col h-full animate-in slide-in-from-left duration-200">
@@ -648,23 +541,42 @@ export const LiveMapPage: React.FC = () => {
                   {/* TAB 4: PHOTOS */}
                   {activeTab === 'photos' && (
                     <div className="space-y-4">
-                      <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
-                        Photographic Evidence ({selectedIssue.photos.length})
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                          Photographic Evidence ({selectedIssue.photos.length})
+                        </span>
+                        <span className="text-[10px] text-teal-accent font-medium">Click to zoom & pan</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2.5">
-                        {selectedIssue.photos.map((p) => (
-                          <div key={p.id} className="relative group rounded-xl overflow-hidden border border-surface-border">
-                            <img
-                              src={p.photo_url}
-                              alt={p.caption || 'Evidence'}
-                              className="w-full h-28 object-cover group-hover:scale-105 transition"
-                            />
-                            <div className="p-1.5 bg-white text-[10px] text-text-muted truncate">
-                              <span className="font-bold text-text-main">{p.photo_type}:</span> {p.caption || 'Photo'}
+                      {selectedIssue.photos.length === 0 ? (
+                        <div className="text-center text-text-muted py-6 text-xs">
+                          No photographic evidence attached to this report.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2.5">
+                          {selectedIssue.photos.map((p, idx) => (
+                            <div
+                              key={p.id}
+                              onClick={() => {
+                                setLightboxIndex(idx);
+                                setLightboxOpen(true);
+                              }}
+                              className="relative group rounded-xl overflow-hidden border border-surface-border cursor-pointer shadow-xs hover:border-teal-accent transition"
+                            >
+                              <img
+                                src={p.photo_url}
+                                alt={p.caption || 'Evidence'}
+                                className="w-full h-28 object-cover group-hover:scale-105 transition"
+                              />
+                              <div className="absolute inset-0 bg-navy-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white">
+                                <Maximize2 className="w-5 h-5 drop-shadow" />
+                              </div>
+                              <div className="p-1.5 bg-white text-[10px] text-text-muted truncate">
+                                <span className="font-bold text-text-main">{p.photo_type}:</span> {p.caption || 'Photo'}
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -746,35 +658,23 @@ export const LiveMapPage: React.FC = () => {
         )}
 
         {/* Leaflet Street Map Container */}
-        <div className="flex-1 h-full relative">
+        <div className="flex-1 h-full relative min-h-[400px]">
           <MapContainer
             center={mapCenter}
             zoom={13}
             scrollWheelZoom={true}
             className="w-full h-full"
+            style={{ height: '100%', width: '100%', minHeight: '400px' }}
           >
             {/* OpenStreetMap Tile Layer with accurate attribution */}
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors'
-              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              subdomains={['a', 'b', 'c']}
               maxZoom={19}
             />
 
             <MapController center={mapCenter} />
-            <MapClickHandler
-              routeMode={routeMode}
-              onAddPoint={(pt) => setRoutePoints((prev) => [...prev, pt])}
-            />
-
-            {/* Custom Inspection Route Polyline Preview */}
-            {routePoints.length > 0 && (
-              <Polyline
-                positions={routePoints}
-                color="#0F9D8A"
-                weight={4}
-                dashArray="6, 8"
-              />
-            )}
 
             {/* Render Map Issue Markers */}
             {mapIssues.map((issue) => {
@@ -832,6 +732,16 @@ export const LiveMapPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Lightbox for Evidence Photos */}
+      {lightboxOpen && (
+        <ImageLightbox
+          isOpen={lightboxOpen}
+          initialIndex={lightboxIndex}
+          photos={selectedIssue?.photos || []}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
   );
 };
