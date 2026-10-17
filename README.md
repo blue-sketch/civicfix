@@ -12,7 +12,7 @@
 
 > 🔗 **Live App**:https://hackathoncivicfix.netlify.app <!-- Replace with your Netlify URL -->
 >
-> 🎬 **Demo Video**: _Coming soon_ <!-- Replace with your video link -->
+> 🎬 **Demo Video**:https://youtu.be/6m1yDmqeyPI <!-- Replace with your video link -->
 
 ---
 
