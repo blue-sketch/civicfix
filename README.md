@@ -237,7 +237,7 @@ civicfix/
 | **Neel Naik** | Full-Stack Development |
 | **Manish Divate** | Full-Stack Development |
 | **Tejas Retharekar** | Full-Stack Development |
-| **Ajinkya Moharir** | Full-Stack Development |
+| **Ajinkya Moharir** | Deployment |
 
 ---
 
