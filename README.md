@@ -10,7 +10,7 @@
 [![Tests](https://img.shields.io/badge/Pytest-10%2F10%20Passing-brightgreen.svg?style=flat&logo=pytest)](https://docs.pytest.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> 🔗 **Live App**: _Coming soon_ <!-- Replace with your Netlify URL -->
+> 🔗 **Live App**:https://hackathoncivicfix.netlify.app <!-- Replace with your Netlify URL -->
 >
 > 🎬 **Demo Video**: _Coming soon_ <!-- Replace with your video link -->
 
