@@ -5,7 +5,7 @@
 
 [[redirects]]
   from = "/api/v1/*"
-  to = "https://civicfix-api.onrender.com/api/v1/:splat"
+  to = "https://civicfix-api-wy9r.onrender.com/api/v1/:splat"
   status = 200
   force = true
 
