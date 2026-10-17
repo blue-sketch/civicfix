@@ -14,7 +14,6 @@ interface AuthContextType {
 const DEMO_CREDENTIALS: Record<UserRole, { email: string; pass: string }> = {
   CITIZEN: { email: 'citizen@civicfix.org', pass: 'CivicFix2026!' },
   MUNICIPAL_OFFICER: { email: 'officer@civicfix.org', pass: 'CivicFix2026!' },
-  FIELD_WORKER: { email: 'worker@civicfix.org', pass: 'CivicFix2026!' },
   ADMIN: { email: 'admin@civicfix.org', pass: 'CivicFix2026!' },
 };
 

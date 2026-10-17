@@ -65,7 +65,7 @@ export const LoginPage: React.FC = () => {
             <div className="text-[11px] font-bold text-text-muted uppercase tracking-wider text-center">
               1-Click Instant Demo Login
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => handleQuickLogin('CITIZEN')}
@@ -86,19 +86,10 @@ export const LoginPage: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => handleQuickLogin('FIELD_WORKER')}
-                className="p-2.5 rounded-xl border border-surface-border bg-surface-muted hover:bg-blue-50 hover:border-primary transition text-left text-xs group"
-              >
-                <div className="font-bold text-navy-900 group-hover:text-primary">Field Worker</div>
-                <div className="text-[10px] text-text-muted">Execute & Resolve</div>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => handleQuickLogin('ADMIN')}
                 className="p-2.5 rounded-xl border border-surface-border bg-surface-muted hover:bg-blue-50 hover:border-primary transition text-left text-xs group"
               >
-                <div className="font-bold text-navy-900 group-hover:text-primary">Administrator</div>
+                <div className="font-bold text-navy-900 group-hover:text-primary">Admin</div>
                 <div className="text-[10px] text-text-muted">Analytics & Audit</div>
               </button>
             </div>

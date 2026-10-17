@@ -95,8 +95,7 @@ For hackathon judges and evaluators, Civic Fix includes instant **1-Click Demo P
 | Persona | Demo Email | Role | Core Capabilities in UI |
 | :--- | :--- | :--- | :--- |
 | **Citizen** | `citizen@civicfix.org` | `CITIZEN` | Submit geo-tagged reports with photos, track "My Complaints" timeline, submit reopen requests |
-| **Municipal Officer** | `officer@civicfix.org` | `OFFICER` | Interactive Live Map, left dossier triage, duplicate confirmation, team dispatch, route planner |
-| **Field Worker** | `worker@civicfix.org` | `WORKER` | Mobile-friendly assigned task queue, progress updater, post-repair photo evidence upload |
+| **Municipal Officer** | `officer@civicfix.org` | `MUNICIPAL_OFFICER` | Interactive Live Map, left dossier triage, duplicate confirmation, team dispatch, route planner, field resolution |
 | **Administrator** | `admin@civicfix.org` | `ADMIN` | Executive KPI dashboard, SLA compliance metrics, ward velocity charts, department configuration |
 
 ---
@@ -216,8 +215,8 @@ pytest -v
 3. **Route Planning**: On the Live Map, click **Mark Custom Route**. Click 3 waypoints on the map, view the real-time calculated distance, name the route (*"Monsoon Pothole Sweep"*), and save it.
 4. **Citizen Grievance Submission**: In the top header, click the **Citizen** persona button. Go to **Report Issue**. Complete the 4-step wizard: select category, drop a pin on the map, upload an image, and submit. Note the generated Ticket ID.
 5. **Officer Triage & Dispatch**: Switch to the **Officer** persona. Go to **Issue Registry** or **Live Map**. Locate the newly submitted issue, click **Verify Issue**, and assign it to *"Road Rapid Patch Unit #1"*.
-6. **Field Worker Resolution**: Switch to the **Worker** persona. Go to **My Assignments**. Advance the status to **In Progress**, then click **Complete Resolution**, enter field completion notes, upload an after-repair photo, and submit.
-7. **Resolution Verified**: Switch back to **Citizen** → **My Complaints**. Confirm the timeline displays `RESOLVED` with the technician's photographic evidence.
+6. **Field Operations Resolution**: In the **Officer** persona, go to **Assignments**. Advance the status to **In Progress**, then click **Complete Resolution**, enter field completion notes, upload an after-repair photo, and submit.
+7. **Resolution Verified**: Switch back to **Citizen** → **My Complaints**. Confirm the timeline displays `RESOLVED` with the photographic evidence.
 
 ---
 

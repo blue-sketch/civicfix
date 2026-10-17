@@ -19,9 +19,12 @@ def seed_database():
     try:
         print("--- Starting deterministic database seed for Civic Fix ---")
         
-        # Enable PostGIS extension
-        db.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
-        db.commit()
+        # Enable PostGIS extension if available
+        try:
+            db.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+            db.commit()
+        except Exception:
+            db.rollback()
 
         # Re-create all tables cleanly
         Base.metadata.create_all(bind=engine)
@@ -88,24 +91,6 @@ def seed_database():
             department_id=dept_swm.id,
             is_active=True
         )
-        worker_user = User(
-            email="worker@civicfix.org",
-            hashed_password=hashed_pwd,
-            full_name="Ramesh Jadhav (Field Lead)",
-            phone="+91 98220 03300",
-            role=UserRole.FIELD_WORKER,
-            department_id=dept_roads.id,
-            is_active=True
-        )
-        worker_water = User(
-            email="worker.water@civicfix.org",
-            hashed_password=hashed_pwd,
-            full_name="Suresh Patil (Drainage Technician)",
-            phone="+91 98220 03301",
-            role=UserRole.FIELD_WORKER,
-            department_id=dept_water.id,
-            is_active=True
-        )
         citizen_user = User(
             email="citizen@civicfix.org",
             hashed_password=hashed_pwd,
@@ -123,22 +108,22 @@ def seed_database():
             is_active=True
         )
         
-        db.add_all([admin_user, officer_roads, officer_swm, worker_user, worker_water, citizen_user, citizen_two])
+        db.add_all([admin_user, officer_roads, officer_swm, citizen_user, citizen_two])
         db.commit()
 
         # 4. Seed Teams & Members
         print("Seeding teams and member assignments...")
-        team_road_rapid = Team(name="Road Rapid Patch Unit #1", department_id=dept_roads.id, leader_id=worker_user.id)
+        team_road_rapid = Team(name="Road Rapid Patch Unit #1", department_id=dept_roads.id, leader_id=officer_roads.id)
         team_swm_cleanup = Team(name="Central Sanitation Crew #4", department_id=dept_swm.id, leader_id=officer_swm.id)
-        team_water_repairs = Team(name="Pipeline & Leak Taskforce #2", department_id=dept_water.id, leader_id=worker_water.id)
+        team_water_repairs = Team(name="Pipeline & Leak Taskforce #2", department_id=dept_water.id, leader_id=officer_roads.id)
         team_lighting_unit = Team(name="Electrical Maintenance Grid #3", department_id=dept_elec.id)
 
         db.add_all([team_road_rapid, team_swm_cleanup, team_water_repairs, team_lighting_unit])
         db.commit()
 
         # Link team members
-        db.execute(team_members.insert().values(team_id=team_road_rapid.id, user_id=worker_user.id))
-        db.execute(team_members.insert().values(team_id=team_water_repairs.id, user_id=worker_water.id))
+        db.execute(team_members.insert().values(team_id=team_road_rapid.id, user_id=officer_roads.id))
+        db.execute(team_members.insert().values(team_id=team_swm_cleanup.id, user_id=officer_swm.id))
         db.commit()
 
         # 5. Seed 35 Realistic Pune Civic Issues
@@ -158,7 +143,7 @@ def seed_database():
                 "address": "FC Road, Near Goodluck Chowk, Deccan Gymkhana",
                 "days_ago": 4,
                 "assigned_team": team_road_rapid,
-                "assigned_user": worker_user
+                "assigned_user": officer_roads
             },
             {
                 "title": "Duplicate report: Deep pothole at Goodluck Chowk",
@@ -195,7 +180,7 @@ def seed_database():
                 "address": "JM Road, Opposite Balgandharva Rangmandir",
                 "days_ago": 1,
                 "assigned_team": team_water_repairs,
-                "assigned_user": worker_water
+                "assigned_user": officer_swm
             },
             {
                 "title": "Streetlights unlit along entire bus route stretch",
@@ -286,7 +271,7 @@ def seed_database():
                 "address": "Shaniwar Wada South Gate, Kasba Peth",
                 "days_ago": 3,
                 "assigned_team": team_water_repairs,
-                "assigned_user": worker_water
+                "assigned_user": officer_swm
             },
             {
                 "title": "Broken heritage stone slab over storm trench",
@@ -467,7 +452,7 @@ def seed_database():
                 "address": "University Road, Near E-Square, Shivajinagar",
                 "days_ago": 2,
                 "assigned_team": team_road_rapid,
-                "assigned_user": worker_user
+                "assigned_user": officer_roads
             },
             {
                 "title": "Pedestrian zebra crossing paint completely erased",
@@ -561,7 +546,7 @@ def seed_database():
                 "address": "Magarpatta South Gate, Hadapsar",
                 "days_ago": 2,
                 "assigned_team": team_water_repairs,
-                "assigned_user": worker_water
+                "assigned_user": officer_swm
             },
             {
                 "title": "Streetlights flashing like strobe lights at traffic junction",
@@ -692,7 +677,7 @@ def seed_database():
             if issue.status in [IssueStatus.IN_PROGRESS, IssueStatus.RESOLVED, IssueStatus.CLOSED]:
                 upd_prog = IssueUpdate(
                     issue_id=issue.id,
-                    actor_id=worker_user.id,
+                    actor_id=officer_roads.id,
                     from_status=IssueStatus.ASSIGNED,
                     to_status=IssueStatus.IN_PROGRESS,
                     note="Field crew arrived on site with materials and commenced repairs",
@@ -703,7 +688,7 @@ def seed_database():
             if issue.status in [IssueStatus.RESOLVED, IssueStatus.CLOSED]:
                 upd_res = IssueUpdate(
                     issue_id=issue.id,
-                    actor_id=worker_user.id,
+                    actor_id=officer_roads.id,
                     from_status=IssueStatus.IN_PROGRESS,
                     to_status=IssueStatus.RESOLVED,
                     note=issue.resolution_notes or "Work completed and tested",
@@ -753,7 +738,7 @@ def seed_database():
                     photo_url="https://images.unsplash.com/photo-1590486803833-1c5dc8ddd4c8?auto=format&fit=crop&w=800&q=80",
                     photo_type="RESOLUTION_EVIDENCE",
                     caption="Post-resolution inspection photo showing completed repair",
-                    uploaded_by=worker_user.id,
+                    uploaded_by=officer_roads.id,
                     created_at=issue.resolved_at or now
                 )
                 db.add(photo_res)
@@ -808,7 +793,6 @@ def seed_database():
         print("Demo Accounts:")
         print("  Citizen:   citizen@civicfix.org   / CivicFix2026!")
         print("  Officer:   officer@civicfix.org   / CivicFix2026!")
-        print("  Worker:    worker@civicfix.org    / CivicFix2026!")
         print("  Admin:     admin@civicfix.org     / CivicFix2026!")
 
     except Exception as e:

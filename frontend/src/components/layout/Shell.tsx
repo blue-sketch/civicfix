@@ -86,14 +86,6 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       ];
     }
 
-    if (role === 'FIELD_WORKER') {
-      return [
-        ...common,
-        { to: '/assignments', label: 'My Field Queue', icon: Briefcase, highlight: true },
-        { to: '/issues', label: 'All Issues', icon: ListTodo },
-        { to: '/settings', label: 'Saved Routes', icon: Settings },
-      ];
-    }
 
     // Officer & Admin
     return [
@@ -160,12 +152,11 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           {/* Quick Demo Role Switcher */}
           <div className="hidden sm:flex items-center bg-navy-800 border border-navy-700 rounded-lg p-0.5 text-xs">
             <span className="px-2 py-1 text-[11px] text-slate-400 font-medium">Role:</span>
-            {(['CITIZEN', 'MUNICIPAL_OFFICER', 'FIELD_WORKER', 'ADMIN'] as UserRole[]).map((r) => {
+            {(['CITIZEN', 'MUNICIPAL_OFFICER', 'ADMIN'] as UserRole[]).map((r) => {
               const active = user?.role === r;
               const labelMap: Record<UserRole, string> = {
                 CITIZEN: 'Citizen',
                 MUNICIPAL_OFFICER: 'Officer',
-                FIELD_WORKER: 'Worker',
                 ADMIN: 'Admin'
               };
               return (

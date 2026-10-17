@@ -1,4 +1,4 @@
-﻿import enum
+import enum
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
@@ -6,7 +6,7 @@ from sqlalchemy import (
     ForeignKey, Enum, JSON
 )
 from sqlalchemy.orm import relationship
-from geoalchemy2 import Geometry
+
 from app.db.session import Base
 
 class IssueCategory(str, enum.Enum):
@@ -49,7 +49,7 @@ class Issue(Base):
     
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-    location_geom = Column(Geometry(geometry_type='POINT', srid=4326, spatial_index=True), nullable=True)
+    location_geom = Column(String(100), nullable=True)
     
     address_text = Column(String(255), nullable=True)
     ward_id = Column(Integer, ForeignKey("wards.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -132,7 +132,7 @@ class IssueComment(Base):
     issue_id = Column(String(36), ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True)
     author_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     comment_text = Column(Text, nullable=False)
-    is_internal = Column(Boolean, default=False, nullable=False)  # Officer/worker internal comment
+    is_internal = Column(Boolean, default=False, nullable=False)  # Officer internal comment
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     issue = relationship("Issue", back_populates="comments")

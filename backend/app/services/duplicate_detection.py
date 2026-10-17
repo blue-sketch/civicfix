@@ -53,15 +53,45 @@ def find_duplicate_candidates(
         LIMIT 10;
     """)
     
-    results = db.execute(
-        sql, 
-        {
-            'lon': longitude, 
-            'lat': latitude, 
-            'radius': max_radius_meters, 
-            'exclude_id': current_issue_id
-        }
-    ).fetchall()
+    try:
+        with db.begin_nested():
+            results = db.execute(
+                sql, 
+                {
+                    'lon': longitude, 
+                    'lat': latitude, 
+                    'radius': max_radius_meters, 
+                    'exclude_id': current_issue_id
+                }
+            ).fetchall()
+    except Exception:
+        # Fallback to standard SQL trigonometry / Haversine formula (supported natively in PostgreSQL)
+        fallback_sql = text("""
+            SELECT 
+                id, ticket_id, title, description, category, status, severity,
+                latitude, longitude, created_at, reporter_id,
+                (6371000 * acos(
+                    LEAST(1.0, GREATEST(-1.0,
+                        cos(radians(:lat)) * cos(radians(latitude)) * 
+                        cos(radians(longitude) - radians(:lon)) + 
+                        sin(radians(:lat)) * sin(radians(latitude))
+                    ))
+                )) as distance_meters
+            FROM issues
+            WHERE status NOT IN ('REJECTED', 'CLOSED')
+              AND (:exclude_id IS NULL OR id != :exclude_id)
+            ORDER BY distance_meters ASC
+            LIMIT 10;
+        """)
+        raw_results = db.execute(
+            fallback_sql, 
+            {
+                'lon': longitude, 
+                'lat': latitude, 
+                'exclude_id': current_issue_id
+            }
+        ).fetchall()
+        results = [r for r in raw_results if r.distance_meters is not None and r.distance_meters <= max_radius_meters]
 
     candidates = []
     for r in results:

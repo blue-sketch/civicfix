@@ -36,7 +36,7 @@ def serialize_issue_detail(issue: Issue, db: Session, current_user: Optional[Use
     ward_name = issue.ward.name if issue.ward else None
     
     # Hide reporter name if anonymous and user is citizen/unauthenticated
-    is_privileged = current_user and current_user.role in [UserRole.MUNICIPAL_OFFICER, UserRole.ADMIN, UserRole.FIELD_WORKER]
+    is_privileged = current_user and current_user.role in [UserRole.MUNICIPAL_OFFICER, UserRole.ADMIN]
     if issue.is_anonymous and not is_privileged:
         reporter_name = "Anonymous Citizen"
     else:
@@ -451,7 +451,7 @@ def resolve_issue(
     resolution_notes: str = Form(...),
     evidence_photo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.MUNICIPAL_OFFICER, UserRole.FIELD_WORKER, UserRole.ADMIN]))
+    current_user: User = Depends(require_role([UserRole.MUNICIPAL_OFFICER, UserRole.ADMIN]))
 ):
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue:
@@ -522,7 +522,7 @@ def add_comment(
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
     
-    is_internal = comment_in.is_internal and (current_user.role in [UserRole.MUNICIPAL_OFFICER, UserRole.ADMIN, UserRole.FIELD_WORKER])
+    is_internal = comment_in.is_internal and (current_user.role in [UserRole.MUNICIPAL_OFFICER, UserRole.ADMIN])
     
     now = datetime.now(timezone.utc)
     comment = IssueComment(

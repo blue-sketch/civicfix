@@ -122,18 +122,15 @@ export const SettingsPage: React.FC = () => {
           <span>Demonstration Role Credentials Reference</span>
         </div>
         <p className="text-xs text-slate-300">
-          The platform includes 4 pre-configured demo roles seeded in Pune. You can switch between them instantly using the top header role buttons or log in directly:
+          The platform includes 3 pre-configured demo roles seeded in Pune. You can switch between them instantly using the top header role buttons or log in directly:
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs font-mono pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono pt-1">
           <div className="p-2.5 bg-navy-800 rounded-lg border border-navy-700">
             <span className="text-teal-accent font-bold">Citizen:</span> citizen@civicfix.org / CivicFix2026!
           </div>
           <div className="p-2.5 bg-navy-800 rounded-lg border border-navy-700">
             <span className="text-teal-accent font-bold">Officer:</span> officer@civicfix.org / CivicFix2026!
-          </div>
-          <div className="p-2.5 bg-navy-800 rounded-lg border border-navy-700">
-            <span className="text-teal-accent font-bold">Worker:</span> worker@civicfix.org / CivicFix2026!
           </div>
           <div className="p-2.5 bg-navy-800 rounded-lg border border-navy-700">
             <span className="text-teal-accent font-bold">Admin:</span> admin@civicfix.org / CivicFix2026!

@@ -260,7 +260,7 @@ export const LiveMapPage: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const isPrivileged = user?.role && ['MUNICIPAL_OFFICER', 'ADMIN', 'FIELD_WORKER'].includes(user.role);
+  const isPrivileged = user?.role && ['MUNICIPAL_OFFICER', 'ADMIN'].includes(user.role);
 
   return (
     <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] relative overflow-hidden bg-surface-bg">

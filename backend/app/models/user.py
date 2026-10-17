@@ -1,4 +1,4 @@
-﻿import enum
+import enum
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
@@ -7,7 +7,6 @@ from app.db.session import Base
 class UserRole(str, enum.Enum):
     CITIZEN = "CITIZEN"
     MUNICIPAL_OFFICER = "MUNICIPAL_OFFICER"
-    FIELD_WORKER = "FIELD_WORKER"
     ADMIN = "ADMIN"
 
 class User(Base):

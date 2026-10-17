@@ -5,6 +5,8 @@ __pycache__/
 *.so
 .Python
 backend/venv/
+backend/.venv/
+backend/pgdata/
 backend/.pytest_cache/
 venv/
 env/
