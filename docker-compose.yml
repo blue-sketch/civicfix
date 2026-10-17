@@ -1,0 +1,22 @@
+﻿services:
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: civicfix_postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: civicfix
+      POSTGRES_USER: civicfix_user
+      POSTGRES_PASSWORD: civicfix_password_2026
+    ports:
+      - "5433:5432"
+    volumes:
+      - civicfix_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U civicfix_user -d civicfix"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  civicfix_pgdata:
+    name: civicfix_pgdata
