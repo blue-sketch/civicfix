@@ -22,12 +22,11 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { UserRole } from '../../types';
 import { api } from '../../services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, logout, switchDemoRole } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -85,13 +84,24 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       ];
     }
 
-    // MUNICIPAL_OFFICER & ADMIN have identical clean operational nav
-    return [
+    if (role === 'MUNICIPAL_OFFICER') {
+      return [
+        { to: '/', label: 'Department Overview', icon: LayoutDashboard },
+        { to: '/map', label: 'Department Issue Map', icon: MapIcon },
+        { to: '/assignments', label: 'Department Work Orders', icon: Briefcase },
+      ];
+    }
+
+    const adminLinks: NavItem[] = [
       { to: '/', label: 'Overview', icon: LayoutDashboard },
-      { to: '/map', label: 'Live Issue Map', icon: MapIcon },
-      { to: '/assignments', label: 'Assignments', icon: Briefcase },
-      { to: '/analytics', label: 'Operation Analytics', icon: BarChart3 },
+      { to: '/map', label: 'Municipal Issue Map', icon: MapIcon },
+      { to: '/assignments', label: 'Verification & Dispatch', icon: Briefcase },
+      { to: '/analytics', label: 'Municipal Analytics', icon: BarChart3 },
     ];
+    if (role === 'ADMIN') {
+      adminLinks.push({ to: '/officers', label: 'Officer Departments', icon: UserCheck });
+    }
+    return adminLinks;
   };
 
   const navLinks = getNavLinks();
@@ -143,35 +153,8 @@ export const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           </div>
         </form>
 
-        {/* Right: Role Switcher & User profile & Notifications */}
+        {/* Right: User profile & Notifications */}
         <div className="flex items-center gap-2.5 sm:gap-4">
-          {/* Quick Demo Role Switcher */}
-          <div className="hidden sm:flex items-center bg-navy-800 border border-navy-700 rounded-lg p-0.5 text-xs">
-            <span className="px-2 py-1 text-[11px] text-slate-400 font-medium">Role:</span>
-            {(['CITIZEN', 'MUNICIPAL_OFFICER', 'ADMIN'] as UserRole[]).map((r) => {
-              const active = user?.role === r;
-              const labelMap: Record<UserRole, string> = {
-                CITIZEN: 'Citizen',
-                MUNICIPAL_OFFICER: 'Officer',
-                ADMIN: 'Admin'
-              };
-              return (
-                <button
-                  key={r}
-                  onClick={() => switchDemoRole(r)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition ${
-                    active
-                      ? 'bg-primary text-white shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-navy-700'
-                  }`}
-                  title={`Switch active demo session to ${labelMap[r]}`}
-                >
-                  {labelMap[r]}
-                </button>
-              );
-            })}
-          </div>
-
           {/* Quick New Report Action - Citizen Only */}
           {user?.role === 'CITIZEN' && (
             <NavLink

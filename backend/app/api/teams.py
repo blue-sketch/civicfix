@@ -40,7 +40,10 @@ class WardOut(BaseModel):
         from_attributes = True
 
 @router.get("/departments", response_model=List[DepartmentOut])
-def list_departments(db: Session = Depends(get_db)):
+def list_departments(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_role([UserRole.ADMIN]))
+):
     return db.query(Department).all()
 
 @router.get("/wards", response_model=List[WardOut])
@@ -48,7 +51,10 @@ def list_wards(db: Session = Depends(get_db)):
     return db.query(Ward).all()
 
 @router.get("/teams", response_model=List[TeamOut])
-def list_teams(db: Session = Depends(get_db)):
+def list_teams(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_role([UserRole.ADMIN]))
+):
     teams = db.query(Team).all()
     results = []
     for t in teams:

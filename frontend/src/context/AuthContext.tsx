@@ -6,16 +6,10 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
+  register: (data: { full_name: string; email: string; password: string; role: UserRole; phone?: string }) => Promise<User>;
   logout: () => void;
-  switchDemoRole: (role: UserRole) => Promise<void>;
 }
-
-const DEMO_CREDENTIALS: Record<UserRole, { email: string; pass: string }> = {
-  CITIZEN: { email: 'citizen@civicfix.org', pass: 'CivicFix2026!' },
-  MUNICIPAL_OFFICER: { email: 'officer@civicfix.org', pass: 'CivicFix2026!' },
-  ADMIN: { email: 'admin@civicfix.org', pass: 'CivicFix2026!' },
-};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -27,17 +21,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     async function loadUser() {
       if (!token) {
-        // Auto-login as Municipal Officer by default for rich initial experience
-        try {
-          const res = await api.login(DEMO_CREDENTIALS.MUNICIPAL_OFFICER.email, DEMO_CREDENTIALS.MUNICIPAL_OFFICER.pass);
-          localStorage.setItem('civicfix_token', res.access_token);
-          setToken(res.access_token);
-          setUser(res.user);
-        } catch {
-          setUser(null);
-        } finally {
-          setIsLoading(false);
-        }
+        setUser(null);
+        setIsLoading(false);
         return;
       }
       try {
@@ -54,13 +39,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadUser();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User> => {
     setIsLoading(true);
     try {
       const res = await api.login(email, password);
       localStorage.setItem('civicfix_token', res.access_token);
       setToken(res.access_token);
       setUser(res.user);
+      return res.user;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const register = async (data: { full_name: string; email: string; password: string; role: UserRole; phone?: string }): Promise<User> => {
+    setIsLoading(true);
+    try {
+      const res = await api.register(data);
+      localStorage.setItem('civicfix_token', res.access_token);
+      setToken(res.access_token);
+      setUser(res.user);
+      return res.user;
     } finally {
       setIsLoading(false);
     }
@@ -72,15 +71,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  const switchDemoRole = async (role: UserRole) => {
-    const creds = DEMO_CREDENTIALS[role];
-    if (creds) {
-      await login(creds.email, creds.pass);
-    }
-  };
-
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout, switchDemoRole }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

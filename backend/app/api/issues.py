@@ -20,12 +20,41 @@ from app.schemas.issue import (
     IssueCommentOut, IssueAssignCreate, IssueAssignmentOut,
     IssueUpdateOut, IssuePhotoOut, IssueCertifyRequest
 )
-from app.api.deps import get_current_user, get_current_active_user_optional, require_role
+from app.api.deps import get_current_user, require_role
 from app.services.priority_engine import calculate_priority_score
 from app.services.duplicate_detection import find_duplicate_candidates
 from app.services.workflow_service import apply_status_transition
 
 router = APIRouter(prefix="/issues", tags=["Issues"])
+
+def ensure_issue_access(issue: Issue, user: User) -> None:
+    """Apply the same record scope to reads and writes across issue workflows."""
+    if user.role == UserRole.CITIZEN and issue.reporter_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    if user.role == UserRole.MUNICIPAL_OFFICER:
+        if not user.department_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No department assigned to officer")
+        belongs_to_department = issue.department_id == user.department_id or any(
+            assignment.department_id == user.department_id and assignment.is_current
+            for assignment in issue.assignments
+        )
+        if not belongs_to_department:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot access an issue outside your assigned department")
+
+def scope_issues_to_user(query, user: User):
+    if user.role == UserRole.CITIZEN:
+        return query.filter(Issue.reporter_id == user.id)
+    if user.role == UserRole.MUNICIPAL_OFFICER:
+        if not user.department_id:
+            return query.filter(Issue.id == "NO_MATCH_UNASSIGNED_OFFICER")
+        return query.filter(or_(
+            Issue.department_id == user.department_id,
+            Issue.assignments.any(and_(
+                IssueAssignment.department_id == user.department_id,
+                IssueAssignment.is_current == True
+            ))
+        ))
+    return query
 
 def generate_ticket_id(db: Session) -> str:
     year = datetime.now(timezone.utc).year
@@ -171,31 +200,11 @@ def list_issues(
     reporter_id: Optional[int] = None,
     sort_by: str = Query("created_at", pattern="^(created_at|priority_score|status|severity)$"),
     sort_order: str = Query("desc", pattern="^(asc|desc)$"),
-    current_user: Optional[User] = Depends(get_current_active_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Issue)
+    query = scope_issues_to_user(db.query(Issue), current_user)
 
-    # Role-based access control and scoping
-    if current_user and current_user.role == UserRole.CITIZEN:
-        # Enforce that citizen can ONLY see their own reported issues
-        query = query.filter(Issue.reporter_id == current_user.id)
-    elif current_user and current_user.role == UserRole.MUNICIPAL_OFFICER:
-        # Enforce that officer can ONLY see their department's issues
-        if not current_user.department_id:
-            query = query.filter(Issue.id == "NO_MATCH_UNASSIGNED_OFFICER")
-        else:
-            query = query.filter(
-                or_(
-                    Issue.department_id == current_user.department_id,
-                    Issue.assignments.any(
-                        and_(
-                            IssueAssignment.department_id == current_user.department_id,
-                            IssueAssignment.is_current == True
-                        )
-                    )
-                )
-            )
-    elif reporter_id:
+    if reporter_id and current_user.role == UserRole.ADMIN:
         query = query.filter(Issue.reporter_id == reporter_id)
 
     if category:
@@ -248,9 +257,10 @@ def get_map_issues(
     status: Optional[IssueStatus] = None,
     severity: Optional[IssueSeverity] = None,
     ward_id: Optional[int] = None,
-    limit: int = Query(300, ge=10, le=1000)
+    limit: int = Query(300, ge=10, le=1000),
+    current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Issue)
+    query = scope_issues_to_user(db.query(Issue), current_user)
 
     if min_lat is not None and max_lat is not None:
         query = query.filter(Issue.latitude >= min_lat, Issue.latitude <= max_lat)
@@ -299,7 +309,7 @@ def get_map_issues(
 def create_issue(
     issue_in: IssueCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role([UserRole.CITIZEN]))
 ):
     ticket_id = generate_ticket_id(db)
     now = datetime.now(timezone.utc)
@@ -386,7 +396,7 @@ def create_issue(
 def get_issue(
     issue_id: str,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_active_user_optional)
+    current_user: User = Depends(get_current_user)
 ):
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue:
@@ -394,20 +404,7 @@ def get_issue(
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
 
-    # Citizen privacy enforcement: citizen can ONLY access their own complaints
-    if current_user and current_user.role == UserRole.CITIZEN:
-        if issue.reporter_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
-
-    # Officer department scoping
-    if current_user and current_user.role == UserRole.MUNICIPAL_OFFICER:
-        if not current_user.department_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No department assigned to officer")
-        is_dept_issue = (issue.department_id == current_user.department_id) or any(
-            a.department_id == current_user.department_id for a in issue.assignments if a.is_current
-        )
-        if not is_dept_issue:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot access issue outside your assigned department")
+    ensure_issue_access(issue, current_user)
     
     return serialize_issue_detail(issue, db, current_user)
 
@@ -422,8 +419,7 @@ def update_issue_status(
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
     
-    if current_user.role == UserRole.CITIZEN and issue.reporter_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot update another citizen's issue")
+    ensure_issue_access(issue, current_user)
 
     updated_issue = apply_status_transition(
         db=db,
@@ -512,6 +508,7 @@ def resolve_issue(
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    ensure_issue_access(issue, current_user)
     
     now = datetime.now(timezone.utc)
 
@@ -562,13 +559,7 @@ def certify_issue(
         )
 
     if current_user.role == UserRole.MUNICIPAL_OFFICER:
-        if not current_user.department_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No department assigned to officer")
-        is_dept_issue = (issue.department_id == current_user.department_id) or any(
-            a.department_id == current_user.department_id for a in issue.assignments if a.is_current
-        )
-        if not is_dept_issue:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot certify issue outside your assigned department")
+        ensure_issue_access(issue, current_user)
 
     certify_note = payload.notes if payload and payload.notes else "Resolution certified by municipal officer after field quality inspection"
     updated = apply_status_transition(
@@ -591,8 +582,7 @@ def reopen_issue(
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
     
-    if current_user.role == UserRole.CITIZEN and issue.reporter_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot reopen another citizen's complaint")
+    ensure_issue_access(issue, current_user)
 
     updated = apply_status_transition(
         db=db,
@@ -613,6 +603,7 @@ def add_comment(
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    ensure_issue_access(issue, current_user)
     
     is_internal = comment_in.is_internal and (current_user.role in [UserRole.MUNICIPAL_OFFICER, UserRole.ADMIN])
     
@@ -662,6 +653,7 @@ def upload_photo(
     issue = db.query(Issue).filter(Issue.id == issue_id).first()
     if not issue:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
+    ensure_issue_access(issue, current_user)
     
     if file.content_type not in settings.ALLOWED_IMAGE_TYPES:
         raise HTTPException(
@@ -709,6 +701,14 @@ def confirm_duplicate(
     dup = db.query(IssueDuplicate).filter(IssueDuplicate.id == candidate_id).first()
     if not dup:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Duplicate candidate not found")
+    if dup.canonical_issue_id != issue_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Duplicate candidate not found")
+    canonical_issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    duplicate_issue = db.query(Issue).filter(Issue.id == dup.duplicate_issue_id).first()
+    if canonical_issue:
+        ensure_issue_access(canonical_issue, current_user)
+    if duplicate_issue:
+        ensure_issue_access(duplicate_issue, current_user)
     
     now = datetime.now(timezone.utc)
     dup.status = "CONFIRMED"
@@ -749,6 +749,14 @@ def reject_duplicate(
     dup = db.query(IssueDuplicate).filter(IssueDuplicate.id == candidate_id).first()
     if not dup:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Duplicate candidate not found")
+    if dup.canonical_issue_id != issue_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Duplicate candidate not found")
+    canonical_issue = db.query(Issue).filter(Issue.id == issue_id).first()
+    duplicate_issue = db.query(Issue).filter(Issue.id == dup.duplicate_issue_id).first()
+    if canonical_issue:
+        ensure_issue_access(canonical_issue, current_user)
+    if duplicate_issue:
+        ensure_issue_access(duplicate_issue, current_user)
     
     dup.status = "REJECTED"
     dup.reviewed_by = current_user.id

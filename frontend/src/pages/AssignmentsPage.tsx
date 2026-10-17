@@ -54,7 +54,7 @@ export const AssignmentsPage: React.FC = () => {
   const [certificationNotes, setCertificationNotes] = useState('');
 
   // Queries
-  const { data: issuesData, isLoading } = useQuery({
+  const { data: issuesData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['assignments_issues', user?.department_id, user?.role],
     queryFn: () => api.listIssues({ page_size: 100 }),
   });
@@ -308,7 +308,13 @@ export const AssignmentsPage: React.FC = () => {
 
       {/* Task Queue List */}
       <div className="space-y-3">
-        {isLoading ? (
+      {isError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">
+          <h2 className="font-bold">Work orders couldn’t be loaded</h2>
+          <p className="mt-1">{error instanceof Error ? error.message : 'The server could not load the work queue.'}</p>
+          <button onClick={() => refetch()} className="mt-3 rounded-lg bg-red-700 px-3 py-2 text-xs font-bold text-white hover:bg-red-600">Retry</button>
+        </div>
+      ) : isLoading ? (
           <div className="bg-white p-12 text-center text-text-muted rounded-panel border border-surface-border animate-pulse">
             Loading operational registry...
           </div>

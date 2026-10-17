@@ -72,7 +72,10 @@ export const CitizenOverview: React.FC = () => {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full space-y-8">
       {/* 1. Warm Personal Greeting Header */}
-      <div className="bg-gradient-to-r from-navy-950 via-navy-900 to-primary/80 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+      <div
+        className="rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden"
+        style={{ background: 'linear-gradient(115deg, #171B35 0%, #202642 56%, #3158D8 100%)' }}
+      >
         <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-teal-accent/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="space-y-2 max-w-xl">
@@ -83,7 +86,7 @@ export const CitizenOverview: React.FC = () => {
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
               Welcome back, {user?.full_name?.split(' ')[0] || 'Citizen'}
             </h1>
-            <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+            <p className="text-slate-200 text-sm sm:text-base leading-relaxed">
               Here's an update on the civic issues you've reported in your neighborhood. Track progress, communicate with municipal officers, and keep Pune clean and safe.
             </p>
           </div>

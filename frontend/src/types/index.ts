@@ -6,9 +6,13 @@ export interface User {
   full_name: string;
   phone?: string;
   role: UserRole;
-  department_id?: number;
+  department_id?: number | null;
   is_active: boolean;
   created_at: string;
+}
+
+export interface OfficerAccount extends User {
+  department_id?: number | null;
 }
 
 export type IssueCategory =

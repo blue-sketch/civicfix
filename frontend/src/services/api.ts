@@ -1,5 +1,6 @@
 import type {
   User,
+  OfficerAccount,
   IssueDetail,
   IssueListResponse,
   MapIssue,
@@ -35,12 +36,19 @@ function getAuthHeaders(isFormData: boolean = false): HeadersInit {
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    let errorDetail = 'Network request failed';
+    let errorDetail = `${res.status} ${res.statusText || 'Network request failed'}`;
     try {
-      const errJson = await res.json();
-      errorDetail = errJson.detail || errJson.message || JSON.stringify(errJson);
+      const body = await res.text();
+      if (body) {
+        try {
+          const errJson = JSON.parse(body);
+          errorDetail = errJson.detail || errJson.message || body;
+        } catch {
+          errorDetail = body;
+        }
+      }
     } catch {
-      errorDetail = await res.text() || res.statusText;
+      // Keep the HTTP status message when the response body cannot be read.
     }
     throw new Error(errorDetail);
   }
@@ -300,6 +308,20 @@ export const api = {
 
   async listTeams(): Promise<Team[]> {
     const res = await fetch(`${API_BASE}/teams`, { headers: getAuthHeaders() });
+    return handleResponse(res);
+  },
+
+  async listOfficers(): Promise<OfficerAccount[]> {
+    const res = await fetch(`${API_BASE}/users/officers`, { headers: getAuthHeaders() });
+    return handleResponse(res);
+  },
+
+  async updateOfficerDepartment(userId: number, departmentId: number | null): Promise<OfficerAccount> {
+    const res = await fetch(`${API_BASE}/users/${userId}/department`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ department_id: departmentId }),
+    });
     return handleResponse(res);
   },
 

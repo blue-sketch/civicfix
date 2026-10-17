@@ -10,6 +10,8 @@ import { MyComplaintsPage } from './pages/MyComplaintsPage';
 import { AssignmentsPage } from './pages/AssignmentsPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { LoginPage } from './pages/LoginPage';
+import { LandingPage } from './pages/LandingPage';
+import { OfficerManagementPage } from './pages/OfficerManagementPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,13 +34,13 @@ const ProtectedAppLayout: React.FC = () => {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return (
     <Shell>
       <Routes>
-        {/* Common Routes */}
+        {/* Shared issue views, scoped to each account by the API */}
         <Route path="/" element={<OverviewPage />} />
         <Route path="/overview" element={<Navigate to="/" replace />} />
         <Route path="/map" element={<LiveMapPage />} />
@@ -51,11 +53,12 @@ const ProtectedAppLayout: React.FC = () => {
           </>
         )}
 
-        {/* Municipal Officer & Admin Routes */}
-        {(user.role === 'MUNICIPAL_OFFICER' || user.role === 'ADMIN') && (
+        {user.role === 'MUNICIPAL_OFFICER' && <Route path="/assignments" element={<AssignmentsPage />} />}
+        {user.role === 'ADMIN' && (
           <>
             <Route path="/assignments" element={<AssignmentsPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/officers" element={<OfficerManagementPage />} />
           </>
         )}
 
@@ -72,14 +75,23 @@ const ProtectedAppLayout: React.FC = () => {
   );
 };
 
+const LandingOrDashboard: React.FC = () => {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return <div className="min-h-screen bg-navy-900 flex items-center justify-center text-white text-xs font-semibold">Initializing Civic Fix Environment...</div>;
+  }
+  return user ? <ProtectedAppLayout /> : <LandingPage />;
+};
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/*" element={<ProtectedAppLayout />} />
+            <Route path="/login" element={<LoginPage mode="login" />} />
+            <Route path="/register" element={<LoginPage mode="register" />} />
+            <Route path="/*" element={<LandingOrDashboard />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>
