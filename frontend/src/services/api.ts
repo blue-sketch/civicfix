@@ -20,7 +20,8 @@ import type {
   IssueSeverity
 } from '../types';
 
-const API_BASE = '/api/v1';
+const rawApiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE = rawApiBase ? `${rawApiBase.replace(/\/$/, '')}/api/v1` : '/api/v1';
 
 function getAuthHeaders(isFormData: boolean = false): HeadersInit {
   const token = localStorage.getItem('civicfix_token');
