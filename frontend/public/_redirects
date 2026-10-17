@@ -1,0 +1,5 @@
+# Proxy API calls to Render backend (replace URL after deploying backend)
+/api/v1/*  https://civicfix-api.onrender.com/api/v1/:splat  200
+
+# SPA fallback — React Router handles client-side routes
+/*          /index.html                                       200
